@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 
 st.set_page_config(page_title="Hameeda Absolute Safety", layout="wide")
-st.title("🛡️ منصة حميدة - نسخة الأمان المطلق v5.0")
+st.title("🛡️ منصة حميدة - نسخة الأمان المطلق v5.1")
 
 # --- الذاكرة ---
 DB_FILE = "trading_data.json"
@@ -24,7 +24,6 @@ def load_data():
 if 'db' not in st.session_state:
     st.session_state.db = load_data()
 
-# استخراج البيانات
 db = st.session_state.db
 balance = db["balance"]
 holding = db["holding"]
@@ -66,10 +65,22 @@ def train_ai(prices):
 
 # جلب بيانات السوق
 option = st.selectbox('العملة المراقبة:', ('BTC-USD', 'ETH-USD'))
-data = yf.download(option, period='1d', interval='1m')
+data = yf.download(option, period='1d', interval='1m', auto_adjust=True)
 
 if not data.empty:
     prices = data['Close'].values.flatten()
+
+    # --- التحقق من صحة البيانات ---
+    # تصفية الأسعار الغير منطقية
+    if option == 'BTC-USD':
+        prices = prices[(prices > 10000) & (prices < 200000)]
+    elif option == 'ETH-USD':
+        prices = prices[(prices > 100) & (prices < 50000)]
+
+    if len(prices) < 50:
+        st.error("⚠️ البيانات غير كافية، حاولي لاحقاً!")
+        st.stop()
+
     current_price = float(prices[-1])
     ma_value = float(np.mean(prices[-15:]))
     rsi = calculate_rsi(prices)
@@ -82,7 +93,7 @@ if not data.empty:
         features = [[rsi, macd, current_price - ma_value]]
         ai_signal = model.predict(features)[0]
 
-    # --- قسم الأمان والتحكم ---
+    # --- الشريط الجانبي ---
     st.sidebar.header("🚨 مركز التحكم في الطوارئ")
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📊 المؤشرات")
@@ -97,7 +108,7 @@ if not data.empty:
             st.session_state.db["trades"].append(f"🔴 طوارئ: بيع يدوي بسعر ${current_price:,.2f}")
             st.session_state.db["holding"] = False
             save_data(st.session_state.db)
-            st.warning("تم تفعيل وضع الطوارئ وإيقاف كافة العمليات.")
+            st.warning("تم تفعيل وضع الطوارئ!")
             st.rerun()
 
     # لوحة المؤشرات
@@ -114,7 +125,7 @@ if not data.empty:
 
     c3.metric("إجمالي المحفظة", f"${balance:,.2f}")
 
-    # --- منطق التداول الذكي ---
+    # --- منطق التداول ---
     buy_condition = rsi < 45 and macd > 0 and ai_signal == 1
     sell_condition = (current_price >= buy_price * 1.01 or
                      current_price <= buy_price * 0.98 or
@@ -144,6 +155,7 @@ if not data.empty:
     st.write("### 📋 سجل العمليات (محفوظ)")
     for t in reversed(trades[-10:]):
         st.info(t)
+        
 
                   
   
